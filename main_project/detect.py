@@ -173,6 +173,59 @@ def detect_live(model):
     cap.release()
     cv2.destroyAllWindows()
 
+def detect_from_directory(model):
+    img_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+        print(f"\nCreated directory: {img_dir}")
+        print("Please add some images to this directory and try again.")
+        return
+        
+    valid_exts = ['.jpg', '.jpeg', '.png', '.bmp']
+    image_files = [f for f in os.listdir(img_dir) if any(f.lower().endswith(ext) for ext in valid_exts)]
+    
+    if not image_files:
+        print(f"\nNo images found in {img_dir}. Please add some images.")
+        return
+        
+    print(f"\nFound {len(image_files)} images in {img_dir}.")
+    cv2.namedWindow("Batch Detection", cv2.WINDOW_NORMAL)
+    
+    for img_file in image_files:
+        img_path = os.path.join(img_dir, img_file)
+        print(f"\n--- Processing: {img_file} ---")
+        
+        frame = cv2.imread(img_path)
+        if frame is None:
+            print("Failed to load image.")
+            continue
+            
+        # PRE-CHECK: Is there a leaf in the image?
+        if not is_leaf_present(frame):
+            label_text = "No Leaf Detected!"
+            color = (0, 165, 255) # Orange for warning
+            confidence = 0.0
+            class_name = "N/A"
+            print("Status: No Plant/Leaf found in image.")
+        else:
+            class_name, confidence = predict_frame(model, frame)
+            label_text, color = get_disease_info(class_name)
+            
+            print(f"Status: {label_text}")
+            print(f"Confidence: {confidence:.2f}%")
+            
+        cv2.putText(frame, f"{label_text} ({confidence:.1f}%)", (10, 30), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, cv2.LINE_AA)
+                    
+        cv2.imshow("Batch Detection", frame)
+        print("Press any key to show next image, or 'q' to stop batch detection.")
+        key = cv2.waitKey(0) & 0xFF
+        if key == ord('q'):
+            print("Batch detection stopped.")
+            break
+            
+    cv2.destroyAllWindows()
+
 def main():
     print("=========================================")
     print("   Tomato Leaf Disease Detector 🍅       ")
@@ -186,19 +239,22 @@ def main():
         print("\nSelect an option:")
         print("1. Detect from Image Path")
         print("2. Detect from Live Camera")
-        print("3. Exit")
+        print("3. Detect from 'assets' directory")
+        print("4. Exit")
         
-        choice = input("Enter your choice (1/2/3): ").strip()
+        choice = input("Enter your choice (1/2/3/4): ").strip()
         
         if choice == '1':
             detect_from_image(model)
         elif choice == '2':
             detect_live(model)
         elif choice == '3':
+            detect_from_directory(model)
+        elif choice == '4':
             print("Exiting program.")
             break
         else:
-            print("Invalid choice. Please enter 1, 2, or 3.")
+            print("Invalid choice. Please enter 1, 2, 3, or 4.")
 
 if __name__ == "__main__":
     main()
