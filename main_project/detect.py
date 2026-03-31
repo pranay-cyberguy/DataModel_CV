@@ -38,19 +38,31 @@ def load_prediction_model():
 def predict_frame(model, frame):
     # Resize to the input shape that the model expects
     img = cv2.resize(frame, IMG_SIZE)
-    
-    # OpenCV loads images in BGR, but Keras training uses RGB. Convert it.
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
-    img_array = tf.keras.preprocessing.image.img_to_array(img_rgb)
-    img_array = tf.expand_dims(img_array, 0)  # Create a batch of 1
+    # 1. Base image
+    img_array1 = tf.keras.preprocessing.image.img_to_array(img_rgb)
     
-    # Predict
-    predictions = model.predict(img_array, verbose=0)
+    # 2. Horizontal Flip
+    img_flip = cv2.flip(img_rgb, 1)
+    img_array2 = tf.keras.preprocessing.image.img_to_array(img_flip)
+    
+    # 3. Brightened
+    img_bright = cv2.convertScaleAbs(img_rgb, alpha=1.2, beta=10)
+    img_array3 = tf.keras.preprocessing.image.img_to_array(img_bright)
+    
+    # Stack into a batch of 3
+    batch = np.stack([img_array1, img_array2, img_array3])
+    
+    # Predict all at once natively (faster)
+    predictions = model.predict(batch, verbose=0)
+    
+    # Average the confidence scores to make it much more stable
+    avg_pred = np.mean(predictions, axis=0)
     
     # Get the highest probability class
-    class_idx = np.argmax(predictions[0])
-    confidence = np.max(predictions[0]) * 100
+    class_idx = np.argmax(avg_pred)
+    confidence = np.max(avg_pred) * 100
     class_name = TOMATO_CLASSES[class_idx]
     
     return class_name, confidence
