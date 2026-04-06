@@ -94,8 +94,33 @@ def get_disease_info(class_name):
     if class_name == "Tomato_healthy":
         return "Healthy Tomato Leaf", (0, 255, 0) # Green text (BGR format for OpenCV)
     else:
-        disease = class_name.replace("Tomato_", "").replace("_", " ")
+        # Clean up the weird class names (e.g., Tomato__Target_Spot -> Target Spot)
+        disease = class_name.replace("Tomato_", "").replace("__", "_").replace("_", " ").strip()
+        disease = disease.replace("  ", " ") # Remove double spaces for safety
         return f"Diseased: {disease}", (0, 0, 255) # Red text
+
+def is_leaf_present(frame):
+    """
+    A lightning-fast 'pre-check' to see if there's actually a plant/leaf in the image.
+    It checks if there's a minimum amount of green/yellow-green color in the frame.
+    """
+    # Convert image to HSV color space (easier to filter colors)
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Define a much broader color range for leaves to prevent normal plants from getting blocked.
+    # Hue: 25 to 90, Saturation: >20, Value: >20 
+    lower_green = np.array([25, 20, 20])
+    upper_green = np.array([90, 255, 255])
+    
+    # Create a mask of the green pixels
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+    
+    # Calculate what percentage of the image is leaf-colored
+    total_pixels = frame.shape[0] * frame.shape[1]
+    green_ratio = cv2.countNonZero(mask) / total_pixels
+    
+    # If more than 1% of the image is green, we say there's a leaf.
+    return green_ratio > 0.01
 
 def detect_from_image(model):
     img_path = input("\nEnter the full path to the image file: ").strip()
@@ -130,6 +155,11 @@ def detect_from_image(model):
         class_name, confidence = predict_frame(model, frame)
         label_text, color = get_disease_info(class_name)
         
+        # If confidence is low, it might be a normal houseplant or unrelated object
+        if confidence < 65.0:
+            label_text = "Uncertain / Unrelated Plant"
+            color = (0, 165, 255) # Orange Warning
+            
         print(f"\n--- Detection Result ---")
         print(f"Status: {label_text}")
         print(f"Confidence: {confidence:.2f}%")
@@ -170,6 +200,12 @@ def detect_live(model):
         else:
             class_name, confidence = predict_frame(model, frame)
             label_text, color = get_disease_info(class_name)
+            
+            # If confidence is low, it might be an unrelated plant
+            if confidence < 65.0:
+                label_text = "Uncertain / Unrelated Plant"
+                color = (0, 165, 255)
+            
             confidence_text = f" ({confidence:.1f}%)"
         
         # Display the result on the frame
@@ -222,6 +258,10 @@ def detect_from_directory(model):
         else:
             class_name, confidence = predict_frame(model, frame)
             label_text, color = get_disease_info(class_name)
+            
+            if confidence < 65.0:
+                label_text = "Uncertain / Unrelated Plant"
+                color = (0, 165, 255)
             
             print(f"Status: {label_text}")
             print(f"Confidence: {confidence:.2f}%")
